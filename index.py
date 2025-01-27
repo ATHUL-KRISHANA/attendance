@@ -331,3 +331,73 @@ def generate_excel(attendance_list, all_dates, search, selected_month):
         df.to_excel(writer, index=False, sheet_name="Attendance")
 
     return response
+
+
+
+
+
+
+
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container my-5 p-5 shadow-lg" style="border-radius:10px;">
+
+    <div class="d-flex justify-content-between align-items-center">
+        <h2>Attendance Sheet</h2>
+        <a href="{% url 'sheet' %}?download=excel&month={{ selected_month }}{% if search %}&search={{ search }}{% endif %}" class="btn btn-success mt-4">Download</a>
+    </div>
+    
+    <form method="GET" action="{% url 'sheet' %}" class="mt-3">
+        <div class="input-group mb-3">
+            <label for="month-select" class="form-label me-3">Select Month:</label>
+            <select id="month-select" name="month" class="form-select">
+                {% for month_date in available_months %}
+                <option value="{{ month_date|date:'Y-m' }}" {% if month_date|date:'Y-m' == selected_month %}selected{% endif %}>
+                    {{ month_date|date:'F Y' }}
+                </option>
+                {% endfor %}
+            </select>
+            <input type="text" name="search" class="form-control ms-3" placeholder="Search by Student Name" value="{% if search %}{{ search }}{% endif %}">
+            <button class="btn btn-outline-primary ms-3" type="submit">Filter</button>
+        </div>
+    </form>
+
+    {% if attendance_list %}
+    <div class="table-responsive">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>No.</th>
+                    <th>Student</th>
+                    <th>Stack</th>
+                    {% for date in all_dates %}
+                    <th>{{ date|date:"d M" }}</th>
+                    {% endfor %}
+                    <th>Total Present</th>
+                    <th>Total Absent</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for attendance in attendance_list %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ attendance.student.first_name }} {{ attendance.student.last_name }}</td>
+                        <td>{{ attendance.stack }}</td>
+                        {% for status in attendance.dates %}
+                        <td class="{% if status == 'Absent' %}text-danger{% elif status == 'Present' %}text-success{% endif %}">
+                            {{ status }}
+                        </td>
+                        {% endfor %}
+                        <td>{{ attendance.total_present }}</td>
+                        <td>{{ attendance.total_absent }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-center mt-4">No attendance data available for the selected month or search query.</p>
+    {% endif %}
+</div>
+{% endblock %}
