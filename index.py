@@ -107,8 +107,13 @@ def add_student(request):
 
 
 def gen(request):
-    cap = cv2.VideoCapture(0)
-    duration = request.session.get('duration', 0)
+    cap = cv2.VideoCapture(1)
+    
+    # Get the duration from the GET parameters passed in the URL
+    duration = int(request.GET.get('duration', 0))  # in milliseconds from JavaScript
+
+    # Convert milliseconds to seconds for time calculations
+    duration_seconds = duration / 1000
 
     start_time = time.time()
 
@@ -118,8 +123,10 @@ def gen(request):
             break
 
         elapsed_time = time.time() - start_time
-        if elapsed_time >= duration:
-            break 
+        print(f"Elapsed time: {elapsed_time:.2f} seconds")
+
+        if elapsed_time >= duration_seconds:
+            break  
 
         _, boxes, _ = face.face_detection(frame_arr=frame, frame_status=True, model='tiny')
 
@@ -440,19 +447,21 @@ _________________________________________
 <script>
   document.getElementById('timeForm').addEventListener('submit', function(event) {
     event.preventDefault(); 
-
+  
     document.getElementById('videoSection').style.display = 'block';
-
+  
     var selectedTime = document.getElementById("timeDropdown").value;
-
-    var duration = selectedTime * 60000;
-
-    document.getElementById("videoStream").src = "{% url 'video_stream' %}";
-
+    var duration = selectedTime * 60000; // Convert minutes to milliseconds
+  
+    // Pass the duration to the video stream
+    document.getElementById("videoStream").src = "{% url 'video_stream' %}?duration=" + duration;
+  
     setTimeout(function() {
       document.getElementById('videoSection').style.display = 'none';
     }, duration);
   });
+  
+  
 </script>
 
 {% endblock %}
