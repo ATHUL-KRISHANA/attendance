@@ -1,0 +1,93 @@
+
+def generate_excel(attendance_list, all_dates, search, selected_month, status_type):
+    sheet_name = "Attendance" if status_type != "placed_resigned" else "Placed & Resigned"
+    filename = f"attendance_{selected_month}.xlsx" if status_type != "placed_resigned" else f"placed_resigned_{selected_month}.xlsx"
+
+    data = []
+    headers = ['No.', 'Student', 'Stack'] + [date.strftime('%d-%m-%Y') for date in all_dates] + ['Total Present', 'Total Absent']
+
+    for idx, attendance in enumerate(attendance_list, start=1):
+        row = [idx, f"{attendance['student'].first_name} {attendance['student'].last_name}", attendance['stack']]
+        row.extend(attendance['dates'])
+        row.append(attendance['total_present'])
+        row.append(attendance['total_absent'])
+        data.append(row)
+
+    df = pd.DataFrame(data, columns=headers)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+    
+    with pd.ExcelWriter(response, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+
+    return response
+
+
+#----
+
+def sheet(request):
+    selected_month = request.GET.get('month', datetime.now().strftime('%Y-%m'))
+    search = request.GET.get('search', '')
+    download = request.GET.get('download', '')
+    status_type = request.GET.get('status_type', '')
+
+    try:
+        start_date = datetime.strptime(selected_month, "%Y-%m")
+    except ValueError:
+        start_date = datetime.now().replace(day=1)
+    end_date = (start_date + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    attendance_records = AttendanceRecord.objects.filter(date__range=(start_date, end_date))
+
+    if status_type == 'placed_resigned':
+        attendance_records = attendance_records.filter(student__status__in=['Placed', 'Resigned'])
+    else:
+        attendance_records = attendance_records.exclude(student__status__in=['Placed', 'Resigned'])
+
+    if search:
+        attendance_records = attendance_records.filter(student__first_name__icontains=search)
+
+    all_dates = sorted(set(attendance_records.values_list('date', flat=True)))
+
+    attendance_list = []
+    for student in attendance_records.values('student').distinct():
+        student_attendance = attendance_records.filter(student=student['student'])
+        statuses = []
+        total_present = 0
+        total_absent = 0
+
+        for date in all_dates:
+            record = student_attendance.filter(date=date).first()
+            if record:
+                statuses.append(record.status)
+                if record.status == "Present":
+                    total_present += 1
+                elif record.status == "Absent":
+                    total_absent += 1
+            else:
+                statuses.append("N/A")
+
+        attendance_list.append({
+            "student": student_attendance.first().student,
+            "stack": student_attendance.first().student.stack.stack_name,
+            "dates": statuses,
+            "total_present": total_present,
+            "total_absent": total_absent,
+        })
+
+    if download == 'excel':
+        return generate_excel(attendance_list, all_dates, search, selected_month, status_type)
+
+    available_months = AttendanceRecord.objects.dates('date', 'month')
+
+    context = {
+        "attendance_list": attendance_list,
+        "all_dates": all_dates,
+        "available_months": available_months,
+        "selected_month": selected_month,
+        "search": search,
+        "status_type": status_type,
+    }
+    return render(request, "sheet.html", context)
+
